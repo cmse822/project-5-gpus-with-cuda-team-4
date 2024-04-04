@@ -162,9 +162,9 @@ void outputToFile(string filename, float* u, unsigned int n){
 int main(int argc, char** argv){
 
   //Number of steps to iterate
-  const unsigned int n_steps = 10;
+  // const unsigned int n_steps = 10;
   //const unsigned int n_steps = 100;
-  // const unsigned int n_steps = 1000000;
+  const unsigned int n_steps = 1000000;
 
   //Whether and how ow often to dump data
   const bool outputData = true;
@@ -292,6 +292,10 @@ int main(int argc, char** argv){
 
     // Launch the kernel
     cuda_diffusion<<<blocks, threads>>>(d_u, d_u2, n, dx, dt);
+
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) 
+     printf("Error: %s\n", cudaGetErrorString(err));
     
     // Swap d_u and d_u2 pointers for the next iteration
     std::swap(d_u, d_u2);
@@ -303,20 +307,15 @@ int main(int argc, char** argv){
       outputToFile(filename, cuda_u, n);
     }
 
-    //Call the cuda_diffusion kernel
-    //FIXME
-
-    //Switch the buffer with the original u
-    //FIXME
-
   }
 	cudaEventRecord(stop);//End timing
 	
 
   //Copy the memory back for one last data dump
   sprintf(filename,"data/cuda_u%08d.dat",i);
-  //FIXME
-  
+  cudaMemcpy(cuda_u, d_u2, n * sizeof(float), cudaMemcpyDeviceToHost);
+  outputToFile(filename,cuda_u,n);
+    
   outputToFile(filename,cuda_u,n);
 
   //Get the total time used on the GPU
