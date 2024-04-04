@@ -274,18 +274,30 @@ int main(int argc, char** argv){
 
   //Allocate memory on the GPU
   float* d_u, *d_u2;
-  //FIXME Allocate d_u,d_u2 on the GPU, and copy cuda_u into d_u
+  cudaMalloc(&d_u, n * sizeof(float));
+  cudaMalloc(&d_u2, n * sizeof(float));
 
-	cudaEventRecord(start);//Start timing
+  // Copy initial conditions from host to device memory
+  cudaMemcpy(d_u, cuda_u, n * sizeof(float), cudaMemcpyHostToDevice);
+
+  dim3 blocks((n + BLOCK_DIM_X - 1) / BLOCK_DIM_X);
+  dim3 threads(BLOCK_DIM_X);
+
+  cudaEventRecord(start);//Start timing
   //Perform n_steps of diffusion
   for( i = 0 ; i < n_steps; i++){
 
+    // Launch the kernel
+    cuda_diffusion<<<blocks, threads>>>(d_u, d_u2, n, dx, dt);
+    
+    // Swap d_u and d_u2 pointers for the next iteration
+    std::swap(d_u, d_u2);
+
     if(outputData && i%outputPeriod == 0){
       //Copy data off the device for writing
-      sprintf(filename,"data/cuda_u%08d.dat",i);
-      //FIXME
-			
-      outputToFile(filename,cuda_u,n);
+      cudaMemcpy(cuda_u, d_u, n * sizeof(float), cudaMemcpyDeviceToHost);
+      sprintf(filename, "data/cuda_u%08d.dat", i);
+      outputToFile(filename, cuda_u, n);
     }
 
     //Call the cuda_diffusion kernel
