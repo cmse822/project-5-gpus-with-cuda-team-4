@@ -162,9 +162,9 @@ void outputToFile(string filename, float* u, unsigned int n){
 int main(int argc, char** argv){
 
   //Number of steps to iterate
-  //const unsigned int n_steps = 10;
+  const unsigned int n_steps = 10;
   //const unsigned int n_steps = 100;
-  const unsigned int n_steps = 1000000;
+  // const unsigned int n_steps = 1000000;
 
   //Whether and how ow often to dump data
   const bool outputData = true;
@@ -189,7 +189,10 @@ int main(int argc, char** argv){
   float const_c = 5.f/2.f  * dt/(dx*dx);
 
   //Copy these to the cuda constant memory
-  //FIXME
+  cudaMemcpyToSymbol(c_a, &const_a, sizeof(float), 0, cudaMemcpyHostToDevice)  ;
+  cudaMemcpyToSymbol(c_b, &const_b, sizeof(float), 0, cudaMemcpyHostToDevice) ;
+  cudaMemcpyToSymbol(c_c, &const_c, sizeof(float), 0, cudaMemcpyHostToDevice)  ;
+
 
   //iterator, for later
   int i;
