@@ -58,39 +58,88 @@ void host_diffusion(float* u, float *u_new, const unsigned int n,
   Do one diffusion step, with CUDA
  *******************************************************************************/
 __global__ 
-void cuda_diffusion(float* u, float *u_new, const unsigned int n){
+void cuda_diffusion(float* u, float *u_new, const unsigned int n, const float dx, const float dt){
+    int i = blockDim.x * blockIdx.x + threadIdx.x + NG; // Calculate global thread index, adjusted for ghost cells
 
+    if (i >= NG && i < n - NG) { // Check if the thread corresponds to an interior point
+        // Apply the diffusion equation
+        u_new[i] = u[i] + dt / (dx * dx) * (
+                       - 1.f / 12 * u[i-2]
+                       + 4.f / 3  * u[i-1]
+                       - 5.f / 2  * u[i]
+                       + 4.f / 3  * u[i+1]
+                       - 1.f / 12 * u[i+2]);
+    }
 
-  //Do the diffusion
-  //FIXME
+    // Ensure all threads have written their updates before applying boundary conditions
+    __syncthreads();
 
-  //Apply the dirichlet boundary conditions
-  //HINT: Think about which threads will have the data for the boundaries
-  //FIXME
+    // Apply Dirichlet boundary conditions by specific threads to avoid race conditions
+    if (i == NG) { // Left boundary
+        u_new[0] = -u_new[NG + 1];
+        u_new[1] = -u_new[NG];
+    }
+    else if (i == n - NG - 1) { // Right boundary, adjusted for zero-based indexing
+        u_new[n - NG]   = -u_new[n - NG - 1];
+        u_new[n - NG + 1] = -u_new[n - NG - 2];
+    }
 }
+
 
 /********************************************************************************
   Do one diffusion step, with CUDA, with shared memory
  *******************************************************************************/
 __global__ 
-void shared_diffusion(float* u, float *u_new, const unsigned int n){
+void shared_diffusion(float* u, float *u_new, const unsigned int n, const float dx, const float dt){
+    // Define the size of the shared memory array. We need to account for the halo regions for the stencil operation.
+    extern __shared__ float shared_u[];
 
-  //Allocate the shared memory
-  //FIXME
+    int globalIdx = threadIdx.x + blockIdx.x * blockDim.x; // Global index for the current thread
+    int localIdx = threadIdx.x + NG; // Local index within shared memory, adjusted for halo
 
-  //Fill shared memory with the data needed from global memory
-  //HINT: 
-  //What data does each block need from global memory?
-  //When do the threads in the block need to sync?
-  //FIXME
+    // Calculate the indices for loading data into shared memory with halo regions
+    int loadIdxStart = blockIdx.x * blockDim.x;
+    int loadIdxEnd = loadIdxStart + blockDim.x - 1;
 
-  //Do the diffusion
-  //FIXME
+    // Load data into shared memory, including halo regions
+    if (globalIdx >= loadIdxStart && globalIdx <= loadIdxEnd) {
+        shared_u[localIdx] = u[globalIdx];
+        
+        // Load halo regions if this thread is responsible
+        if(threadIdx.x < NG) {
+            // Left halo
+            if(blockIdx.x > 0 && (globalIdx - NG) >= 0) {
+                shared_u[localIdx - NG] = u[globalIdx - NG];
+            }
+            // Right halo
+            if((globalIdx + NG) < n && (localIdx + NG) < (blockDim.x + 2*NG)) {
+                shared_u[localIdx + NG] = u[globalIdx + NG];
+            }
+        }
+    }
 
-  //Apply the dirichlet boundary conditions
-  //HINT: Think about which threads will have the data for the boundaries
-  //FIXME
+    __syncthreads(); // Synchronize to ensure all threads have loaded their parts into shared memory
+
+    // Perform the diffusion step using values from shared memory
+    if (globalIdx >= NG && globalIdx < n - NG) { // Ensure we're working within valid range
+        u_new[globalIdx] = shared_u[localIdx] + dt / (dx * dx) * (
+                            - 1.f / 12 * shared_u[localIdx - 2]
+                            + 4.f / 3  * shared_u[localIdx - 1]
+                            - 5.f / 2  * shared_u[localIdx]
+                            + 4.f / 3  * shared_u[localIdx + 1]
+                            - 1.f / 12 * shared_u[localIdx + 2]);
+    }
+
+    // Apply the Dirichlet boundary conditions directly in global memory (if this thread corresponds to a boundary)
+    if (globalIdx == 0) {
+        u_new[0] = -u_new[NG + 1];
+        u_new[1] = -u_new[NG];
+    } else if (globalIdx == n - NG - 1) {
+        u_new[n - NG] = -u_new[n - NG - 1];
+        u_new[n - NG + 1] = -u_new[n - NG - 2];
+    }
 }
+
 
 /********************************************************************************
   Dump u to a file
@@ -139,7 +188,7 @@ int main(int argc, char** argv){
   float const_b = 4.f/3.f  * dt/(dx*dx);
   float const_c = 5.f/2.f  * dt/(dx*dx);
 
-  //Copy these the cuda constant memory
+  //Copy these to the cuda constant memory
   //FIXME
 
   //iterator, for later
