@@ -9,7 +9,7 @@
 using namespace std;
 
 const unsigned int NG = 2;
-const unsigned int BLOCK_DIM_X = 256;
+// const unsigned int BLOCK_DIM_X = 256;
 
 __constant__ float c_a, c_b, c_c;
 
@@ -90,7 +90,7 @@ void cuda_diffusion(float* u, float *u_new, const unsigned int n, const float dx
   Do one diffusion step, with CUDA, with shared memory
  *******************************************************************************/
 __global__ 
-void shared_diffusion(float* u, float *u_new, const unsigned int n, const float dx, const float dt) {
+void shared_diffusion(float* u, float *u_new, const unsigned int n, const float dx, const float dt, const float BLOCK_DIM_X) {
     // Define the size of the shared memory array. We need to account for the halo regions for the stencil operation.
     extern __shared__ float shared_u[];
 
@@ -172,7 +172,16 @@ int main(int argc, char** argv){
   //Number of steps to iterate
 //   const unsigned int n_steps = 10;
   // const unsigned int n_steps = 100;
-  const unsigned int n_steps = 1000000;
+  // const unsigned int n_steps = 1000000;
+
+  // Get the command line arguments.
+  int n_steps = std::atoi(argv[1]); //number of steps
+  int BLOCK_DIM = std::atoi(argv[2]); //block size
+  const char* csvfile = argv[3]; // Name of the CSV file to
+
+  // Check if file exists to avoid overwriting headers
+  bool fileExists = std::ifstream(csvfile).good();
+
 
   //Whether and how ow often to dump data
   const bool outputData = true;
@@ -183,8 +192,8 @@ int main(int argc, char** argv){
   //const unsigned int n = (1<<15) +2*NG;
 
   //Block and grid dimensions
-  const unsigned int blockDim = BLOCK_DIM_X;
-  const unsigned int gridDim = (n-2*NG)/blockDim;
+  // const unsigned int blockDim = BLOCK_DIM_X;
+  // const unsigned int gridDim = (n-2*NG)/blockDim;
 
   //Physical dimensions of the domain
   const float L = 2*M_PI;
@@ -268,6 +277,7 @@ int main(int argc, char** argv){
   get_walltime(&endTime);
 
   cout<<"Host function took: "<<(endTime-startTime)*1000./n_steps<<"ms per step"<<endl;
+  float hosttime = (endTime-startTime)*1000./n_steps;
 
   outputToFile("data/host_uFinal.dat",host_u,n);
 
@@ -291,8 +301,8 @@ int main(int argc, char** argv){
   // Copy initial conditions from host to device memory
   cudaMemcpy(d_u, cuda_u, n * sizeof(float), cudaMemcpyHostToDevice);
 
-  dim3 blocks((n - 2 * NG) / BLOCK_DIM_X);
-  dim3 threads(BLOCK_DIM_X);
+  dim3 blocks((n - 2 * NG) / BLOCK_DIM);
+  dim3 threads(BLOCK_DIM);
 
   
   cudaEventRecord(start);//Start timing
@@ -333,6 +343,7 @@ int main(int argc, char** argv){
 	cudaEventElapsedTime(&milliseconds, start, stop);
 
   cout<<"Cuda Kernel took: "<<milliseconds/n_steps<<"ms per step"<<endl;
+  float nonsharedtime = milliseconds/n_steps;
 
 
 /********************************************************************************
@@ -361,7 +372,7 @@ int main(int argc, char** argv){
   for( i = 0 ; i < n_steps; i++){
 
     //Call the shared_diffusion kernel
-    shared_diffusion<<<blocks, threads, shared_mem_size>>>(d_u, d_u2, n, dx, dt);
+    shared_diffusion<<<blocks, threads, shared_mem_size>>>(d_u, d_u2, n, dx, dt,BLOCK_DIM);
 
     // cudaDeviceSynchronize();
     
@@ -399,6 +410,7 @@ int main(int argc, char** argv){
 	cudaEventElapsedTime(&milliseconds, start, stop);
 
   cout<<"Shared Memory Kernel took: "<<milliseconds/n_steps<<"ms per step"<<endl;
+  float sharedtime = milliseconds/n_steps;
   
 
 /********************************************************************************
@@ -420,7 +432,7 @@ int main(int argc, char** argv){
     cudaMemcpy(d_u, shared_u, n * sizeof(float), cudaMemcpyHostToDevice);
 
     //Call the shared_diffusion kernel
-    shared_diffusion<<<blocks, threads, shared_mem_size>>>(d_u, d_u2, n, dx, dt);
+    shared_diffusion<<<blocks, threads, shared_mem_size>>>(d_u, d_u2, n, dx, dt,BLOCK_DIM);
 
     //Copy the data from host to device
     //FIXME copy d_u2 to cuda_u (i think he means shared_u??)
@@ -438,6 +450,19 @@ int main(int argc, char** argv){
 	cudaEventElapsedTime(&milliseconds, start, stop);
 
   cout<<"Excessive cudaMemcpy took: "<<milliseconds/n_steps<<"ms per step"<<endl;
+
+  float memcpytime = milliseconds/n_steps;
+
+  //write results to CSV file
+  std::ofstream outputFile(csvfile, std::ios::app);
+  if (!fileExists) {
+                outputFile << "N_STEPS,GRID SIZE,BLOCK SIZE,HOST TIME,CUDA TIME NON SHARED,CUDA TIME SHARED,CUDA MEM COPY TIME" << std::endl;
+            }
+
+            // Writing the data
+            outputFile << n_steps << ','<< n << "," << BLOCK_DIM << "," << hosttime << ',' << nonsharedtime << 
+            ','<< sharedtime << ','<<memcpytime <<std::endl;
+            outputFile.close();
   
 
   //Clean up the data

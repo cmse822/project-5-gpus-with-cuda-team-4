@@ -24,11 +24,17 @@ module purge
 module load NVHPC/21.9-GCCcore-8.3.0-CUDA-10.2
 
 # Compile the code 
-nvcc diffusion.cu -o diffusion.out -O3 -DDEBUG 
+nvcc diffusion.cu -o diffusion.out -O3 
+
+# Block Size
+block_sizes=(256 512 1024)
 
 
 # Run Executable
-srun ./diffusion.out 
+for block_size in "${block_sizes[@]}"; do
+    srun ./diffusion.out 100 $block_size 'Output.csv'
+done
+
 
 # Print Resource Information
 # scontrol show job $SLURM_JOB_ID
