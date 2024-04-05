@@ -184,12 +184,12 @@ int main(int argc, char** argv){
 
 
   //Whether and how ow often to dump data
-  const bool outputData = true;
+  const bool outputData = false; 
   const unsigned int outputPeriod = n_steps/10;
 
   //Size of u
-  const unsigned int n = (1<<11) +2*NG;
-  //const unsigned int n = (1<<15) +2*NG;
+  // const unsigned int n = (1<<11) +2*NG;
+  const unsigned int n = (1<<15) +2*NG;
 
   //Block and grid dimensions
   // const unsigned int blockDim = BLOCK_DIM_X;
