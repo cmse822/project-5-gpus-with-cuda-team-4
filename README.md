@@ -110,7 +110,7 @@ the same shared memory.
 
 ![Shared memory results](shared_memory.png)
 
-Yes, there is a slowdown when the block size is increased from 256 to 512, but it increases back up when the block dimension increases to 1024 in the shared memory case. The reasons for the slowdown could be as follows:
+Yes, there is a slowdown when the block size is increased from 512 to 1024, but the performance is better when the block dimension increases from 256 to 512 in the shared memory case. The reasons for the slowdown could be as follows:
 
 1. Data has to be copied from the global memory to the shared memory.
 2. When two threads are trying to access the same data, there could be banking conflicts.
