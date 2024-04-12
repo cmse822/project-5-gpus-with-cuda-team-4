@@ -95,7 +95,11 @@ All the different block dimensions seem to follow the same trend.
 faster than the theoretical performance of the host if we used all the cores on
 the CPU?
 
-The GPU implementations - niave CUDA kernel and shared memory cuda kernel are much faster in comparison to the threaded host code. But the memory copying case is slower than the host code.
+The GPU implementations - naive CUDA kernel and shared memory cuda kernel are much faster in comparison to the threaded host code. But the memory copying case is slower than the host code.
+
+For block dimension = 256,
+
+If we used all the cores on the CPU, the time would have been 0.053775 / 28 (number of cores) = 0.00192, which is lower than the CUDA implementations.
 
 3. For the naive kernel, the shared memory kernel, and the excessive `memcpy` case,
 which is the slowest? Why? How might you design a larger code to avoid this slow down?
