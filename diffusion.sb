@@ -1,0 +1,41 @@
+#!/bin/bash --login
+# Job name:
+#SBATCH --job-name=Diffusion_CUDA
+
+# TODO: Edit
+# Number of nodes
+#SBATCH --ntasks=1
+#SBATCH --gpus=v100:1
+#SBATCH --mem-per-gpu=3G # memory for CPUs
+
+# Wall time
+# Format: "minutes", "hours:minutes:seconds", 
+# "days-hours", or "days-hours:minutes"
+#SBATCH --time=01:00:00
+
+# Standard output and error to file
+# %x: job name, %j: job ID
+#SBATCH --output=%x-%j.SLURMout
+
+
+
+# Purge current modules and load those we require
+module purge
+module load NVHPC/21.9-GCCcore-8.3.0-CUDA-10.2
+
+# Compile the code 
+nvcc diffusion.cu -o diffusion.out -O3 
+
+# Block Size
+block_sizes=(256 512 1024)
+
+
+# Run Executable
+for block_size in "${block_sizes[@]}"; do
+    srun ./diffusion.out 100 $block_size 'Output.csv'
+done
+
+
+# Print Resource Information
+# scontrol show job $SLURM_JOB_ID
+# js -j $SLURM_JOB_ID
