@@ -77,13 +77,40 @@ and the excessive memory copying case, using block dimensions of 256, 512,
 and 1024. Use a grid size of `2^15+2*NG` (or larger) and run for 100 steps (or
 shorter, if it's taking too long). Remember to use `-O3`! 
 
+The times shown below are the time taken per step in milliseconds and they are averaged over five trials.
+
+| Grid size | Block dimension | Host | Naive CUDA kernel | Shared memory CUDA kernel | Memory copying case |
+|:----------:|:----------:|:----------:|:----------:|:----------:|:----------:|
+| 32772 | 256 | 0.053775 | 0.003415 | 0.003183 | 0.091907 |
+| 32772 | 512 | 0.055205 | 0.003242 | 0.002891 | 0.091322 |
+| 32772 | 1024 | 0.055518 | 0.003274 | 0.003133 | 0.090563 |
+
+![256 block dimension results](256.png)
+![512 block dimension results](512.png)
+![1024 block dimension results](1024.png)
+
+All the different block dimensions seem to follow the same trend.
+
 2. How do the GPU implementations compare to the single threaded host code. Is it
 faster than the theoretical performance of the host if we used all the cores on
 the CPU?
 
+The GPU implementations - niave CUDA kernel and shared memory cuda kernel are much faster in comparison to the threaded host code. But the memory copying case is slower than the host code.
+
 3. For the naive kernel, the shared memory kernel, and the excessive `memcpy` case,
 which is the slowest? Why? How might you design a larger code to avoid this slow down?
+
+The excessive memory copy kernel is the slowest, since for every step, the data is first copied from the host to the cuda device and at the end of the step, the updated data, to be used in the next step, is copied from CUDA device to the host. 
+
+But this approach is very common in practice, especially in data heavy and compute intensive applications such as deep learning. This would be a good strategy, if the time taken by computation between memory copies are much higher than the time required to copy the data.
 
 4. Do you see a slow down when you increase the block dimension? Why? Consider
 that multiple blocks may run on a single multiprocessor simultaneously, sharing
 the same shared memory.
+
+![Shared memory results](shared_memory.png)
+
+Yes, there is a slowdown when the block size is increased from 256 to 512, but it increases back up when the block dimension increases to 1024 in the shared memory case. The reasons for the slowdown could be as follows:
+
+1. Data has to be copied from the global memory to the shared memory.
+2. When two threads are trying to access the same data, there could be banking conflicts.
